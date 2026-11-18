@@ -1,0 +1,59 @@
+# ExamGuard 로컬 실행 환경
+#
+#   DB만 실행 (IntelliJ 등에서 앱을 직접 실행할 때)
+#     docker compose up -d
+#
+#   DB + 백엔드 앱을 모두 컨테이너로 실행
+#     docker compose --profile app up -d --build
+#
+#   중지     docker compose --profile app down      (DB 데이터 유지)
+#   초기화   docker compose --profile app down -v   (DB 데이터까지 삭제)
+#
+# 기본값은 application.yaml과 같습니다.
+# 바꾸려면 이 폴더에 .env 파일을 만들어 덮어쓰세요. (예: APP_PORT=8081)
+
+name: examguard
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: examguard
+      POSTGRES_USER: ${DB_USERNAME:-examguard}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-examguard}
+      TZ: Asia/Seoul
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    profiles: ["app"]
+    build: .
+    image: examguard-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/examguard
+      DB_USERNAME: ${DB_USERNAME:-examguard}
+      DB_PASSWORD: ${DB_PASSWORD:-examguard}
+      TZ: Asia/Seoul
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
