@@ -1,11 +1,37 @@
 package com.examguard.backend.domain.attempt.repository;
 
 import com.examguard.backend.domain.attempt.entity.Attempt;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface AttemptRepository extends JpaRepository<Attempt, Long> {
 
     // 학생의 해당 시험 응시 조회 (시험당 1건)
     Optional<Attempt> findByExamIdAndUserId(Long examId, Long userId);
+
+    // 관리자 시험 목록: 시험별 입장 인원
+    @Query("select a.exam.id as examId, count(a) as joinedCount from Attempt a group by a.exam.id")
+    List<JoinedCount> countJoinedByExam();
+
+    interface JoinedCount {
+        Long getExamId();
+
+        Long getJoinedCount();
+    }
+
+    // 조기 종료: 응시 중인 학생을 마지막 저장 답안 그대로 제출 처리
+    @Modifying
+    @Query("""
+            update Attempt a
+               set a.status = com.examguard.backend.domain.attempt.entity.AttemptStatus.SUBMITTED,
+                   a.submittedAt = :now
+             where a.exam.id = :examId
+               and a.status = com.examguard.backend.domain.attempt.entity.AttemptStatus.IN_PROGRESS
+            """)
+    int submitAllInProgress(@Param("examId") Long examId, @Param("now") Instant now);
 }

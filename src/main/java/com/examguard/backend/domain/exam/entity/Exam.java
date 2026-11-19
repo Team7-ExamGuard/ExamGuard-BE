@@ -68,14 +68,29 @@ public class Exam extends BaseTimeEntity {
         return ExamStatus.OPEN;
     }
 
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
+
+    // 임시 저장 (DRAFT일 때만 호출)
+    public void updateDraft(String title, Instant startAt, Instant endAt) {
+        this.title = title;
+        this.startAt = startAt;
+        this.endAt = endAt;
+    }
+
     // 공개: 시험 코드 발급
     public void publish(String code, Instant now) {
         this.code = code;
         this.publishedAt = now;
     }
 
-    // 조기 종료: 종료 시각을 지금으로 당김
+    // 조기 종료: 종료 시각을 지금으로 당김.
+    // 시작 전에 종료(=시험 취소)하면 시작 시각도 지금으로 당겨서 startAt ≤ endAt을 유지
     public void close(Instant now) {
         this.endAt = now;
+        if (startAt != null && startAt.isAfter(now)) {
+            this.startAt = now;
+        }
     }
 }

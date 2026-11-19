@@ -18,6 +18,12 @@ public class GeneralException extends RuntimeException {
         this.status = status;
     }
 
+    // 같은 에러 코드에 상황별 메시지를 줄 때 (예: VALIDATION_ERROR + "제목을 입력하세요.")
+    public GeneralException(BaseStatus status, String message) {
+        super(message);
+        this.status = status;
+    }
+
     public ReasonDto getErrorReasonHttpStatus() {
         return this.status.getReasonHttpStatus();
     }

@@ -29,8 +29,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<Object> handleGeneral(GeneralException generalException, WebRequest request) {
         ReasonDto errorReasonHttpStatus = generalException.getErrorReasonHttpStatus();
 
+        // 메시지는 예외에 담긴 것 (상황별 메시지가 없으면 ErrorStatus 기본 메시지)
         CommonResponse<Object> body = CommonResponse.onFailure(errorReasonHttpStatus.getCode(),
-                errorReasonHttpStatus.getMessage(),
+                generalException.getMessage(),
                 null);
 
         return super.handleExceptionInternal(generalException, body, HttpHeaders.EMPTY,
