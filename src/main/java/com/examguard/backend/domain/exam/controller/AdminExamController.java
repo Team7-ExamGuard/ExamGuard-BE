@@ -4,6 +4,7 @@ import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
 import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
+import com.examguard.backend.domain.exam.dto.PublishResponse;
 import com.examguard.backend.domain.exam.service.AdminExamService;
 import com.examguard.backend.global.payload.CommonResponse;
 import com.examguard.backend.global.payload.status.SuccessStatus;
@@ -54,5 +55,11 @@ public class AdminExamController {
     public CommonResponse<ExamIdResponse> updateExam(@PathVariable Long examId,
                                                      @Valid @RequestBody ExamSaveRequest request) {
         return CommonResponse.onSuccess(adminExamService.updateExam(examId, request));
+    }
+
+    @Operation(summary = "시험 공개 & 코드 발급", description = "검증에 걸리면 400 VALIDATION_ERROR(첫 번째 이유가 message), 이미 공개됐으면 409 EXAM_NOT_DRAFT")
+    @PostMapping("/{examId}/publish")
+    public CommonResponse<PublishResponse> publishExam(@PathVariable Long examId) {
+        return CommonResponse.onSuccess(adminExamService.publishExam(examId));
     }
 }

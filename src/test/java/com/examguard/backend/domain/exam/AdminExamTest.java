@@ -1,6 +1,7 @@
 package com.examguard.backend.domain.exam;
 
 import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -84,6 +85,30 @@ class AdminExamTest {
                 .andExpect(jsonPath("$.result.title").value("제목 수정"))
                 .andExpect(jsonPath("$.result.questions.length()").value(1))
                 .andExpect(jsonPath("$.result.questions[0].content").value("새 문항"));
+    }
+
+    @Test
+    void 공개할_때_검증에_걸리면_400() throws Exception {
+        Long examId = createExam("{\"title\": \"\", \"questions\": []}");
+
+        mockMvc.perform(post("/api/admin/exams/" + examId + "/publish").header("Authorization", adminToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("제목을 입력하세요."));
+    }
+
+    @Test
+    void 공개하면_코드가_발급되고_더는_수정할_수_없다() throws Exception {
+        Long examId = createExam(fullExamJson());
+
+        mockMvc.perform(post("/api/admin/exams/" + examId + "/publish").header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.code", matchesPattern("[A-Z0-9]{6}")));
+
+        mockMvc.perform(put("/api/admin/exams/" + examId).header("Authorization", adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(fullExamJson()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EXAM_NOT_DRAFT"));
     }
 
     @Test
