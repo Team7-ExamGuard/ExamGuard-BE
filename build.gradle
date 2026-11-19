@@ -25,6 +25,12 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.flywaydb:flyway-database-postgresql'
+	// JWT (JSON 처리는 gson 사용: jjwt-jackson은 Jackson 2를 끌고 와서 Boot 4의 Jackson 3와 섞임)
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly 'io.jsonwebtoken:jjwt-gson:0.13.0'
+	// Swagger (springdoc 3.x가 Spring Boot 4용)
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
