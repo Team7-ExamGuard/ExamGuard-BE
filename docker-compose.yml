@@ -44,6 +44,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/examguard
       DB_USERNAME: ${DB_USERNAME:-examguard}
       DB_PASSWORD: ${DB_PASSWORD:-examguard}
+      JWT_SECRET: ${JWT_SECRET}   # .env에서 읽음 (.env.example 참고)
       TZ: Asia/Seoul
     ports:
       - "${APP_PORT:-8080}:8080"

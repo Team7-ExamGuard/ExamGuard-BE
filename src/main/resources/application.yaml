@@ -2,6 +2,14 @@ spring:
   application:
     name: backend
 
+  # 로컬 실행·테스트 때 프로젝트 폴더의 .env를 읽는다 (JWT_SECRET 등). 파일이 없으면 무시
+  config:
+    import: optional:file:.env[.properties]
+
+  # 로그인은 JWT로 직접 처리하므로 Spring 기본 사용자(자동 생성 비밀번호)는 만들지 않음
+  autoconfigure:
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/examguard}
     username: ${DB_USERNAME:examguard}
@@ -18,3 +26,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+jwt:
+  secret: ${JWT_SECRET}            # 32바이트 이상. 로컬은 .env, 서버는 환경 변수로 주입
+  access-token-validity: 3h        # 시험 시간보다 길게 (시험 중 만료되면 답안 저장이 막힘)
