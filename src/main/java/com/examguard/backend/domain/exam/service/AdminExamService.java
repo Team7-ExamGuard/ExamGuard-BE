@@ -1,8 +1,10 @@
 package com.examguard.backend.domain.exam.service;
 
+import com.examguard.backend.domain.attempt.repository.AttemptRepository;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
+import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
 import com.examguard.backend.domain.exam.dto.QuestionSaveRequest;
 import com.examguard.backend.domain.exam.entity.Exam;
 import com.examguard.backend.domain.exam.entity.Question;
@@ -17,7 +19,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +37,20 @@ public class AdminExamService {
 
     private final ExamRepository examRepository;
     private final QuestionRepository questionRepository;
+    private final AttemptRepository attemptRepository;
     private final UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public List<ExamSummaryResponse> getExams() {
+        Instant now = Instant.now();
+        Map<Long, Long> joinedCounts = attemptRepository.countJoinedByExam().stream()
+                .collect(Collectors.toMap(AttemptRepository.JoinedCount::getExamId,
+                        AttemptRepository.JoinedCount::getJoinedCount));
+
+        return examRepository.findAll(Sort.by(Sort.Direction.DESC, "id")).stream() // 최근에 만든 시험부터
+                .map(exam -> ExamSummaryResponse.of(exam, now, joinedCounts.getOrDefault(exam.getId(), 0L)))
+                .toList();
+    }
 
     @Transactional(readOnly = true)
     public ExamDetailResponse getExam(Long examId) {

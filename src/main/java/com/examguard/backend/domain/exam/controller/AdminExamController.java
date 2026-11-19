@@ -3,12 +3,14 @@ package com.examguard.backend.domain.exam.controller;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
+import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
 import com.examguard.backend.domain.exam.service.AdminExamService;
 import com.examguard.backend.global.payload.CommonResponse;
 import com.examguard.backend.global.payload.status.SuccessStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminExamController {
 
     private final AdminExamService adminExamService;
+
+    @Operation(summary = "시험 목록", description = "최근에 만든 시험부터. DRAFT는 code가 null")
+    @GetMapping
+    public CommonResponse<List<ExamSummaryResponse>> getExams() {
+        return CommonResponse.onSuccess(adminExamService.getExams());
+    }
 
     @Operation(summary = "시험 상세 (정답 포함)")
     @GetMapping("/{examId}")

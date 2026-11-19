@@ -7,11 +7,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.examguard.backend.domain.attempt.entity.Attempt;
+import com.examguard.backend.domain.attempt.repository.AttemptRepository;
+import com.examguard.backend.domain.exam.entity.Exam;
+import com.examguard.backend.domain.exam.repository.ExamRepository;
 import com.examguard.backend.domain.user.entity.Role;
 import com.examguard.backend.domain.user.entity.User;
 import com.examguard.backend.domain.user.repository.UserRepository;
 import com.examguard.backend.global.security.jwt.JwtTokenProvider;
 import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +39,10 @@ class AdminExamTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
+    @Autowired ExamRepository examRepository;
+    @Autowired AttemptRepository attemptRepository;
     @Autowired JwtTokenProvider jwtTokenProvider;
+    @Autowired EntityManager entityManager;
 
     String adminToken;
 
@@ -77,6 +86,17 @@ class AdminExamTest {
                 .andExpect(jsonPath("$.result.questions[0].content").value("새 문항"));
     }
 
+    @Test
+    void 목록에_입장_인원이_나온다() throws Exception {
+        Long examId = createExam(fullExamJson());
+        saveInProgressAttempt(examId);
+
+        mockMvc.perform(get("/api/admin/exams").header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result[0].id").value(examId)) // 최근에 만든 시험이 맨 위
+                .andExpect(jsonPath("$.result[0].joinedCount").value(1));
+    }
+
     // ---------- 도우미 ----------
 
     // 공개 검증을 통과하는 시험 본문 (내일 10시~11시, 객관식 1 + 단답형 1)
@@ -97,5 +117,17 @@ class AdminExamTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.result.id")).longValue();
+    }
+
+    // 학생 한 명이 입장해서 응시 중인 상태를 만든다
+    private Long saveInProgressAttempt(Long examId) {
+        Exam exam = examRepository.findById(examId).orElseThrow();
+        User student = userRepository.save(User.builder()
+                .loginId("test-student").password("pw").name("학생").role(Role.STUDENT).build());
+        Attempt attempt = Attempt.builder().exam(exam).user(student).joinedAt(Instant.now()).build();
+        attempt.start(Instant.now());
+        attemptRepository.save(attempt);
+        entityManager.flush();
+        return attempt.getId();
     }
 }
