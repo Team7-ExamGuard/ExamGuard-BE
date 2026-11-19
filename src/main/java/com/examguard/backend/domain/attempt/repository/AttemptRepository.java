@@ -14,6 +14,16 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
     // 학생의 해당 시험 응시 조회 (시험당 1건)
     Optional<Attempt> findByExamIdAndUserId(Long examId, Long userId);
 
+    // 학생 입장: 응시 기록이 없을 때만 WAITING으로 만든다.
+    // 입장 버튼을 두 번 누르는 등 같은 요청이 동시에 와도 (exam_id, user_id) 중복 에러 없이 한 건만 남는다
+    @Modifying
+    @Query(value = """
+            insert into attempts (exam_id, user_id, status, joined_at)
+            values (:examId, :userId, 'WAITING', :now)
+            on conflict (exam_id, user_id) do nothing
+            """, nativeQuery = true)
+    int insertIfAbsent(@Param("examId") Long examId, @Param("userId") Long userId, @Param("now") Instant now);
+
     // 관리자 시험 목록: 시험별 입장 인원
     @Query("select a.exam.id as examId, count(a) as joinedCount from Attempt a group by a.exam.id")
     List<JoinedCount> countJoinedByExam();

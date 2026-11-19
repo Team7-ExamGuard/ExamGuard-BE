@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +33,9 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Attempt {
+
+    // 종료 시각이 지나도 이만큼은 제출을 받아 줌 (네트워크 지연 대비)
+    public static final Duration SUBMIT_GRACE = Duration.ofSeconds(30);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -91,5 +95,13 @@ public class Attempt {
     public void submit(Instant now) {
         this.status = AttemptStatus.SUBMITTED;
         this.submittedAt = now;
+    }
+
+    // 종료 시각 + 유예가 지나도록 제출하지 않은 응시 중 학생은 마지막 저장 답안으로 제출 처리.
+    // 시작하지 않은 WAITING 학생은 그대로 둔다. 조회할 때마다 확인하므로 별도 스케줄러가 없다
+    public void submitIfExpired(Instant now) {
+        if (status == AttemptStatus.IN_PROGRESS && !now.isBefore(exam.getEndAt().plus(SUBMIT_GRACE))) {
+            submit(exam.getEndAt());
+        }
     }
 }
