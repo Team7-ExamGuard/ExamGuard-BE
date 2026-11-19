@@ -26,6 +26,12 @@ public enum ErrorStatus implements BaseStatus {
     EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "시험을 찾을 수 없습니다."),
     EXAM_NOT_DRAFT(HttpStatus.CONFLICT, "EXAM_NOT_DRAFT", "공개된 시험은 수정할 수 없습니다."),
     EXAM_NOT_OPEN(HttpStatus.CONFLICT, "EXAM_NOT_OPEN", "종료할 수 없는 상태입니다."),
+
+    // 학생 응시
+    EXAM_NOT_PUBLISHED(HttpStatus.CONFLICT, "EXAM_NOT_PUBLISHED", "아직 공개되지 않은 시험입니다."),
+    EXAM_NOT_STARTED(HttpStatus.FORBIDDEN, "EXAM_NOT_STARTED", "아직 시작 전입니다."),
+    EXAM_CLOSED(HttpStatus.CONFLICT, "EXAM_CLOSED", "이미 종료된 시험입니다."),
+    ALREADY_SUBMITTED(HttpStatus.CONFLICT, "ALREADY_SUBMITTED", "이미 제출한 시험입니다."),
     ;
 
     private final HttpStatus httpStatus;
