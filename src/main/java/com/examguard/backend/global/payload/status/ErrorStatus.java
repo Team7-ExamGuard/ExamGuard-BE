@@ -21,6 +21,11 @@ public enum ErrorStatus implements BaseStatus {
 
     // 인증
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다."),
+
+    // 시험
+    EXAM_NOT_FOUND(HttpStatus.NOT_FOUND, "EXAM_NOT_FOUND", "시험을 찾을 수 없습니다."),
+    EXAM_NOT_DRAFT(HttpStatus.CONFLICT, "EXAM_NOT_DRAFT", "공개된 시험은 수정할 수 없습니다."),
+    EXAM_NOT_OPEN(HttpStatus.CONFLICT, "EXAM_NOT_OPEN", "종료할 수 없는 상태입니다."),
     ;
 
     private final HttpStatus httpStatus;
