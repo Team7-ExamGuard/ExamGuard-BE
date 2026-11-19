@@ -12,6 +12,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     // 시험의 문항을 순서대로 조회
     List<Question> findByExamIdOrderBySeq(Long examId);
 
+    // 학생 시험 정보: 문항 수
+    long countByExamId(Long examId);
+
     // 임시 저장 때 기존 문항을 한 번에 지움 (바로 DELETE 실행)
     // JPA가 INSERT를 DELETE보다 먼저 보내면 (exam_id, seq) 중복 에러가 나므로, 지우기를 먼저 확정한다
     @Modifying

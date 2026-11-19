@@ -1,6 +1,8 @@
 package com.examguard.backend.domain.exam;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.endsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -8,7 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.examguard.backend.domain.attempt.entity.Attempt;
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
 import com.examguard.backend.domain.exam.entity.Exam;
+import com.examguard.backend.domain.exam.entity.Question;
+import com.examguard.backend.domain.exam.entity.QuestionType;
 import com.examguard.backend.domain.exam.repository.ExamRepository;
+import com.examguard.backend.domain.exam.repository.QuestionRepository;
 import com.examguard.backend.domain.user.entity.Role;
 import com.examguard.backend.domain.user.entity.User;
 import com.examguard.backend.domain.user.repository.UserRepository;
@@ -16,6 +21,7 @@ import com.examguard.backend.global.security.jwt.JwtTokenProvider;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +33,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 학생 응시 흐름: 시험 코드로 입장
+ * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,6 +43,7 @@ class StudentExamTest {
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
     @Autowired ExamRepository examRepository;
+    @Autowired QuestionRepository questionRepository;
     @Autowired AttemptRepository attemptRepository;
     @Autowired JwtTokenProvider jwtTokenProvider;
     @Autowired EntityManager entityManager;
@@ -95,6 +102,30 @@ class StudentExamTest {
                 .andExpect(jsonPath("$.code").value("ALREADY_SUBMITTED"));
     }
 
+    @Test
+    void 입장한_시험의_정보와_내_응시_상태를_본다() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(10), Duration.ofMinutes(70));
+        saveQuestions(exam);
+        saveAttempt(exam, false);
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId()).header("Authorization", studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("PUBLISHED")) // 공개됐고 시작 전
+                .andExpect(jsonPath("$.result.startAt", endsWith("+09:00")))
+                .andExpect(jsonPath("$.result.questionCount").value(2))
+                .andExpect(jsonPath("$.result.attempt.status").value("WAITING"))
+                .andExpect(jsonPath("$.result.attempt.submittedAt").isEmpty());
+    }
+
+    @Test
+    void 입장하지_않은_시험이면_404() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(10), Duration.ofMinutes(70));
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId()).header("Authorization", studentToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("EXAM_NOT_FOUND"));
+    }
+
     // ---------- 도우미 ----------
 
     private ResultActions join(String code) throws Exception {
@@ -121,5 +152,14 @@ class StudentExamTest {
         attemptRepository.save(attempt);
         entityManager.flush();
         return attempt;
+    }
+
+    // 객관식 1 + 단답형 1
+    private void saveQuestions(Exam exam) {
+        questionRepository.saveAll(List.of(
+                Question.builder().exam(exam).seq(1).type(QuestionType.MULTIPLE_CHOICE)
+                        .content("다음 중 유리수가 아닌 것은?").options(List.of("0.5", "-3", "√2", "2/3")).answer("2").build(),
+                Question.builder().exam(exam).seq(2).type(QuestionType.SHORT_ANSWER)
+                        .content("0.333…을 기약분수로 나타내면?").answer("1/3").build()));
     }
 }
