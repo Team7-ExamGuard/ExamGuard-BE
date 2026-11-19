@@ -1,5 +1,6 @@
 package com.examguard.backend.domain.exam;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.examguard.backend.domain.attempt.entity.Attempt;
+import com.examguard.backend.domain.attempt.entity.AttemptStatus;
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
 import com.examguard.backend.domain.exam.entity.Exam;
 import com.examguard.backend.domain.exam.repository.ExamRepository;
@@ -109,6 +111,27 @@ class AdminExamTest {
                         .contentType(MediaType.APPLICATION_JSON).content(fullExamJson()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("EXAM_NOT_DRAFT"));
+    }
+
+    @Test
+    void 조기_종료하면_응시_중인_학생은_제출된다() throws Exception {
+        Long examId = createExam(fullExamJson());
+        mockMvc.perform(post("/api/admin/exams/" + examId + "/publish").header("Authorization", adminToken));
+        Long attemptId = saveInProgressAttempt(examId);
+
+        mockMvc.perform(post("/api/admin/exams/" + examId + "/close").header("Authorization", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.endAt").isNotEmpty());
+
+        // 테스트 전체가 한 트랜잭션이라, 변경을 DB에 반영(flush)한 뒤 메모리를 비우고 다시 읽는다
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(attemptRepository.findById(attemptId).orElseThrow().getStatus()).isEqualTo(AttemptStatus.SUBMITTED);
+
+        // 이미 종료된 시험은 다시 종료할 수 없음
+        mockMvc.perform(post("/api/admin/exams/" + examId + "/close").header("Authorization", adminToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EXAM_NOT_OPEN"));
     }
 
     @Test

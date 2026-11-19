@@ -1,6 +1,7 @@
 package com.examguard.backend.domain.exam.service;
 
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
+import com.examguard.backend.domain.exam.dto.CloseResponse;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
@@ -8,6 +9,7 @@ import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
 import com.examguard.backend.domain.exam.dto.PublishResponse;
 import com.examguard.backend.domain.exam.dto.QuestionSaveRequest;
 import com.examguard.backend.domain.exam.entity.Exam;
+import com.examguard.backend.domain.exam.entity.ExamStatus;
 import com.examguard.backend.domain.exam.entity.Question;
 import com.examguard.backend.domain.exam.entity.QuestionType;
 import com.examguard.backend.domain.exam.repository.ExamRepository;
@@ -101,6 +103,20 @@ public class AdminExamService {
         validateForPublish(exam, questionRepository.findByExamIdOrderBySeq(examId), now);
         exam.publish(generateUniqueCode(), now);
         return new PublishResponse(exam.getCode());
+    }
+
+    // 조기 종료: 시작 전이면 시험 취소, 진행 중이면 응시 중 학생을 마지막 저장 답안으로 제출 처리
+    public CloseResponse closeExam(Long examId) {
+        Exam exam = findExam(examId);
+        Instant now = Instant.now();
+        ExamStatus status = exam.statusAt(now);
+        if (status == ExamStatus.DRAFT || status == ExamStatus.CLOSED) {
+            throw new ExamException(ErrorStatus.EXAM_NOT_OPEN);
+        }
+
+        exam.close(now);
+        attemptRepository.submitAllInProgress(examId, now);
+        return new CloseResponse(TimeUtils.toKst(exam.getEndAt()));
     }
 
     private Exam findExam(Long examId) {

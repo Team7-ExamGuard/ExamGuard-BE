@@ -85,8 +85,12 @@ public class Exam extends BaseTimeEntity {
         this.publishedAt = now;
     }
 
-    // 조기 종료: 종료 시각을 지금으로 당김
+    // 조기 종료: 종료 시각을 지금으로 당김.
+    // 시작 전에 종료(=시험 취소)하면 시작 시각도 지금으로 당겨서 startAt ≤ endAt을 유지
     public void close(Instant now) {
         this.endAt = now;
+        if (startAt != null && startAt.isAfter(now)) {
+            this.startAt = now;
+        }
     }
 }

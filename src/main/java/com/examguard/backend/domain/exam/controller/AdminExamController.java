@@ -1,5 +1,6 @@
 package com.examguard.backend.domain.exam.controller;
 
+import com.examguard.backend.domain.exam.dto.CloseResponse;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
@@ -61,5 +62,11 @@ public class AdminExamController {
     @PostMapping("/{examId}/publish")
     public CommonResponse<PublishResponse> publishExam(@PathVariable Long examId) {
         return CommonResponse.onSuccess(adminExamService.publishExam(examId));
+    }
+
+    @Operation(summary = "시험 조기 종료", description = "시작 전이면 취소, 진행 중이면 응시 중 학생 제출 처리. DRAFT·CLOSED면 409 EXAM_NOT_OPEN")
+    @PostMapping("/{examId}/close")
+    public CommonResponse<CloseResponse> closeExam(@PathVariable Long examId) {
+        return CommonResponse.onSuccess(adminExamService.closeExam(examId));
     }
 }
