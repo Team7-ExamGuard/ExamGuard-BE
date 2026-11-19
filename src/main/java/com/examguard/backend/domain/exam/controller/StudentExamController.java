@@ -3,11 +3,13 @@ package com.examguard.backend.domain.exam.controller;
 import com.examguard.backend.domain.exam.dto.JoinRequest;
 import com.examguard.backend.domain.exam.dto.JoinResponse;
 import com.examguard.backend.domain.exam.dto.StudentExamResponse;
+import com.examguard.backend.domain.exam.dto.StudentQuestionResponse;
 import com.examguard.backend.domain.exam.service.StudentExamService;
 import com.examguard.backend.global.payload.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,5 +42,13 @@ public class StudentExamController {
     public CommonResponse<StudentExamResponse> getExam(@AuthenticationPrincipal Long userId,
                                                        @PathVariable Long examId) {
         return CommonResponse.onSuccess(studentExamService.getExam(userId, examId));
+    }
+
+    @Operation(summary = "문항 조회 (응시 시작)",
+            description = "정답 제외. 처음 받으면 응시 중이 됨. 시작 전 403 EXAM_NOT_STARTED, 종료 409 EXAM_CLOSED, 제출 완료 409 ALREADY_SUBMITTED")
+    @GetMapping("/{examId}/questions")
+    public CommonResponse<List<StudentQuestionResponse>> getQuestions(@AuthenticationPrincipal Long userId,
+                                                                      @PathVariable Long examId) {
+        return CommonResponse.onSuccess(studentExamService.getQuestions(userId, examId));
     }
 }

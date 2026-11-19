@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.examguard.backend.domain.attempt.entity.Attempt;
+import com.examguard.backend.domain.attempt.entity.AttemptStatus;
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
 import com.examguard.backend.domain.exam.entity.Exam;
 import com.examguard.backend.domain.exam.entity.Question;
@@ -33,7 +34,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회
+ * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작)
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -124,6 +125,37 @@ class StudentExamTest {
         mockMvc.perform(get("/api/student/exams/" + exam.getId()).header("Authorization", studentToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("EXAM_NOT_FOUND"));
+    }
+
+    @Test
+    void 시작_전에_문항을_요청하면_403() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(10), Duration.ofMinutes(70));
+        saveQuestions(exam);
+        saveAttempt(exam, false);
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/questions").header("Authorization", studentToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("EXAM_NOT_STARTED"));
+    }
+
+    @Test
+    void 시작하면_정답_없이_문항을_받고_응시_중이_된다() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(-1), Duration.ofMinutes(59)); // 1분 전 시작
+        saveQuestions(exam);
+        Attempt attempt = saveAttempt(exam, false);
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/questions").header("Authorization", studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.length()").value(2))
+                .andExpect(jsonPath("$.result[0].order").value(1))
+                .andExpect(jsonPath("$.result[0].options[2]").value("√2"))
+                .andExpect(jsonPath("$.result[0].answer").doesNotExist()); // 정답은 안 줌
+
+        // 테스트 전체가 한 트랜잭션이라, 변경을 DB에 반영(flush)한 뒤 메모리를 비우고 다시 읽는다
+        entityManager.flush();
+        entityManager.clear();
+        assertThat(attemptRepository.findById(attempt.getId()).orElseThrow().getStatus())
+                .isEqualTo(AttemptStatus.IN_PROGRESS);
     }
 
     // ---------- 도우미 ----------
