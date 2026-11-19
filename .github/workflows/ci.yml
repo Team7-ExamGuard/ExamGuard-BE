@@ -1,0 +1,44 @@
+name: ci
+
+# PR을 열거나 main에 push할 때 테스트·빌드 확인
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    # 테스트가 실제 Postgres를 쓰므로 DB 컨테이너를 같이 띄움 (docker-compose.yml과 같은 이미지·계정)
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: examguard
+          POSTGRES_USER: examguard
+          POSTGRES_PASSWORD: examguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U examguard -d examguard"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Gradle 의존성 캐시
+      - uses: gradle/actions/setup-gradle@v4
+
+      # build = 컴파일 + 테스트 + jar
+      # .env는 git에 없으므로 테스트 전용 JWT 키를 직접 지정 (실제 서버 키 아님)
+      - run: ./gradlew build
+        env:
+          JWT_SECRET: ci-test-only-secret-not-a-real-key-0123456789abcdefghijklmnopqrs
