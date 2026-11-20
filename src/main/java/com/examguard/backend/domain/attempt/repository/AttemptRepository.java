@@ -3,6 +3,7 @@ package com.examguard.backend.domain.attempt.repository;
 import com.examguard.backend.domain.attempt.entity.Attempt;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,28 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
             on conflict (exam_id, user_id) do nothing
             """, nativeQuery = true)
     int insertIfAbsent(@Param("examId") Long examId, @Param("userId") Long userId, @Param("now") Instant now);
+
+    // 답안 자동 저장: 저장된 version보다 큰 요청만 반영 (조건부 UPDATE 한 번)
+    // 읽고 비교한 뒤 쓰면, 늦게 도착한 옛 요청이 그 사이에 최신 답안을 덮어쓸 수 있어서 DB가 비교하게 한다.
+    // 바뀐 행이 0이면 더 최신 답안이 이미 있다는 뜻. 실행 후 영속성 컨텍스트를 비워 옛 값이 남지 않게 한다
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            update Attempt a
+               set a.answers = :answers,
+                   a.version = :version,
+                   a.answeredCount = :answeredCount,
+                   a.saveFailCount = a.saveFailCount + :saveFailCount,
+                   a.lastSavedAt = :now
+             where a.id = :attemptId
+               and a.version < :version
+               and a.status = com.examguard.backend.domain.attempt.entity.AttemptStatus.IN_PROGRESS
+            """)
+    int saveAnswersIfNewer(@Param("attemptId") Long attemptId,
+                           @Param("version") int version,
+                           @Param("answers") Map<String, Object> answers,
+                           @Param("answeredCount") int answeredCount,
+                           @Param("saveFailCount") int saveFailCount,
+                           @Param("now") Instant now);
 
     // 관리자 시험 목록: 시험별 입장 인원
     @Query("select a.exam.id as examId, count(a) as joinedCount from Attempt a group by a.exam.id")

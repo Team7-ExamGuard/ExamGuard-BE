@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -34,7 +35,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작)
+ * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작) → 답안 저장·복원
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -158,7 +159,51 @@ class StudentExamTest {
                 .isEqualTo(AttemptStatus.IN_PROGRESS);
     }
 
+    @Test
+    void 답안을_저장하면_다시_불러올_수_있다() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(-1), Duration.ofMinutes(59));
+        Attempt attempt = saveAttempt(exam, true);
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken))
+                .andExpect(jsonPath("$.result.version").value(0)) // 저장한 적 없으면 빈 답안
+                .andExpect(jsonPath("$.result.answers").isEmpty());
+
+        saveAnswers(exam, "{\"version\": 1, \"answers\": {\"11\": 2, \"12\": \"1/3\"}, \"saveFailCount\": 1}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.version").value(1))
+                .andExpect(jsonPath("$.result.savedAt", endsWith("+09:00")));
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken))
+                .andExpect(jsonPath("$.result.version").value(1))
+                .andExpect(jsonPath("$.result.answers.11").value(2))     // 객관식은 보기 인덱스
+                .andExpect(jsonPath("$.result.answers.12").value("1/3")); // 단답형은 문자열
+
+        Attempt saved = attemptRepository.findById(attempt.getId()).orElseThrow();
+        assertThat(saved.getAnsweredCount()).isEqualTo(2);
+        assertThat(saved.getSaveFailCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 늦게_도착한_예전_답안은_409이고_최신_답안이_남는다() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(-1), Duration.ofMinutes(59));
+        saveAttempt(exam, true);
+        saveAnswers(exam, "{\"version\": 2, \"answers\": {\"11\": 3}}").andExpect(status().isOk());
+
+        saveAnswers(exam, "{\"version\": 1, \"answers\": {\"11\": 0}}") // 네트워크가 늦어 순서가 뒤바뀐 요청
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STALE_VERSION"));
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken))
+                .andExpect(jsonPath("$.result.version").value(2))
+                .andExpect(jsonPath("$.result.answers.11").value(3));
+    }
+
     // ---------- 도우미 ----------
+
+    private ResultActions saveAnswers(Exam exam, String json) throws Exception {
+        return mockMvc.perform(put("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken)
+                .contentType(MediaType.APPLICATION_JSON).content(json));
+    }
 
     private ResultActions join(String code) throws Exception {
         return mockMvc.perform(post("/api/student/exams/join").header("Authorization", studentToken)
