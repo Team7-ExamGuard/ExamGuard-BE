@@ -1,6 +1,7 @@
 package com.examguard.backend.domain.attempt.repository;
 
 import com.examguard.backend.domain.attempt.entity.Attempt;
+import com.examguard.backend.domain.attempt.entity.AttemptStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
@@ -64,6 +65,34 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
         Long getExamId();
 
         Long getJoinedCount();
+    }
+
+    // 관리자 응시 현황: 학생별 한 줄 (입장한 순서).
+    // 5초마다 불리므로 답안(jsonb)은 읽지 않고, 필요한 칸만 사용자와 조인해 쿼리 한 번으로 가져온다
+    @Query("""
+            select u.loginId as loginId, u.name as name, a.status as status,
+                   a.joinedAt as joinedAt, a.lastSavedAt as lastSavedAt,
+                   a.answeredCount as answeredCount, a.saveFailCount as saveFailCount
+              from Attempt a join a.user u
+             where a.exam.id = :examId
+             order by a.id
+            """)
+    List<StudentRow> findStudentRows(@Param("examId") Long examId);
+
+    interface StudentRow {
+        String getLoginId();
+
+        String getName();
+
+        AttemptStatus getStatus();
+
+        Instant getJoinedAt();
+
+        Instant getLastSavedAt();
+
+        int getAnsweredCount();
+
+        int getSaveFailCount();
     }
 
     // 조기 종료: 응시 중인 학생을 마지막 저장 답안 그대로 제출 처리
