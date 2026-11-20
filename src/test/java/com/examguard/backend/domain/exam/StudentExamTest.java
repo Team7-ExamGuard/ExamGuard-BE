@@ -35,7 +35,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작) → 답안 저장·복원
+ * 학생 응시 흐름: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작) → 답안 저장·복원 → 최종 제출
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -198,7 +198,56 @@ class StudentExamTest {
                 .andExpect(jsonPath("$.result.answers.11").value(3));
     }
 
+    @Test
+    void 제출하면_완료되고_다시_제출하면_409() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(-1), Duration.ofMinutes(59));
+        saveAttempt(exam, true);
+
+        submit(exam, "{\"version\": 1, \"answers\": {\"11\": 2}}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.submittedAt", endsWith("+09:00")));
+
+        submit(exam, "{\"version\": 1, \"answers\": {\"11\": 2}}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ALREADY_SUBMITTED"));
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId()).header("Authorization", studentToken))
+                .andExpect(jsonPath("$.result.attempt.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.result.attempt.submittedAt", endsWith("+09:00")));
+    }
+
+    @Test
+    void 서버_답안이_더_최신이면_제출해도_서버_답안이_남는다() throws Exception {
+        Exam exam = savePublishedExam("TEST01", Duration.ofMinutes(-1), Duration.ofMinutes(59));
+        saveAttempt(exam, true);
+        saveAnswers(exam, "{\"version\": 3, \"answers\": {\"11\": 3}}").andExpect(status().isOk());
+
+        submit(exam, "{\"version\": 2, \"answers\": {\"11\": 0}}").andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken))
+                .andExpect(jsonPath("$.result.version").value(3))
+                .andExpect(jsonPath("$.result.answers.11").value(3));
+    }
+
+    @Test
+    void 종료_후_30초까지는_제출되고_지나면_409() throws Exception {
+        Exam justEnded = savePublishedExam("TEST01", Duration.ofMinutes(-60), Duration.ofSeconds(-10)); // 10초 전 종료
+        saveAttempt(justEnded, true);
+        submit(justEnded, "{\"version\": 1, \"answers\": {}}").andExpect(status().isOk());
+
+        Exam longEnded = savePublishedExam("TEST02", Duration.ofMinutes(-60), Duration.ofMinutes(-1)); // 1분 전 종료
+        saveAttempt(longEnded, true);
+        submit(longEnded, "{\"version\": 1, \"answers\": {}}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EXAM_CLOSED"));
+    }
+
     // ---------- 도우미 ----------
+
+    private ResultActions submit(Exam exam, String json) throws Exception {
+        return mockMvc.perform(post("/api/student/exams/" + exam.getId() + "/submit").header("Authorization", studentToken)
+                .contentType(MediaType.APPLICATION_JSON).content(json));
+    }
 
     private ResultActions saveAnswers(Exam exam, String json) throws Exception {
         return mockMvc.perform(put("/api/student/exams/" + exam.getId() + "/answers").header("Authorization", studentToken)

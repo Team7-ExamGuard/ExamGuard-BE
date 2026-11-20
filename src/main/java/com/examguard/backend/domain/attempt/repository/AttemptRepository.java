@@ -1,12 +1,14 @@
 package com.examguard.backend.domain.attempt.repository;
 
 import com.examguard.backend.domain.attempt.entity.Attempt;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,6 +28,11 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
             on conflict (exam_id, user_id) do nothing
             """, nativeQuery = true)
     int insertIfAbsent(@Param("examId") Long examId, @Param("userId") Long userId, @Param("now") Instant now);
+
+    // 최종 제출: 같은 응시에 저장·제출이 동시에 와도 하나씩 처리되도록 응시 행을 잠그고 읽는다 (SELECT … FOR UPDATE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Attempt a where a.exam.id = :examId and a.user.id = :userId")
+    Optional<Attempt> findForUpdate(@Param("examId") Long examId, @Param("userId") Long userId);
 
     // 답안 자동 저장: 저장된 version보다 큰 요청만 반영 (조건부 UPDATE 한 번)
     // 읽고 비교한 뒤 쓰면, 늦게 도착한 옛 요청이 그 사이에 최신 답안을 덮어쓸 수 있어서 DB가 비교하게 한다.

@@ -7,6 +7,8 @@ import com.examguard.backend.domain.exam.dto.SaveAnswersRequest;
 import com.examguard.backend.domain.exam.dto.SaveAnswersResponse;
 import com.examguard.backend.domain.exam.dto.StudentExamResponse;
 import com.examguard.backend.domain.exam.dto.StudentQuestionResponse;
+import com.examguard.backend.domain.exam.dto.SubmitRequest;
+import com.examguard.backend.domain.exam.dto.SubmitResponse;
 import com.examguard.backend.domain.exam.service.StudentExamService;
 import com.examguard.backend.global.payload.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // 권한(STUDENT)은 SecurityConfig의 /api/student/** 규칙으로 확인
-@Tag(name = "학생 - 시험 응시", description = "시험 코드 입장·시험 정보·문항 조회·답안 저장·복원")
+@Tag(name = "학생 - 시험 응시", description = "시험 코드 입장·시험 정보·문항 조회·답안 저장·복원·최종 제출")
 @RestController
 @RequestMapping("/api/student/exams")
 @RequiredArgsConstructor
@@ -72,5 +74,15 @@ public class StudentExamController {
                                                            @PathVariable Long examId,
                                                            @Valid @RequestBody SaveAnswersRequest request) {
         return CommonResponse.onSuccess(studentExamService.saveAnswers(userId, examId, request));
+    }
+
+    @Operation(summary = "최종 제출 (직접·자동 공용)",
+            description = "종료 후 30초까지 받음(지나면 409 EXAM_CLOSED). 요청 version이 저장된 version보다 낮으면 서버 답안 유지. "
+                    + "제출 완료 409 ALREADY_SUBMITTED, 시작 전 403 EXAM_NOT_STARTED")
+    @PostMapping("/{examId}/submit")
+    public CommonResponse<SubmitResponse> submitExam(@AuthenticationPrincipal Long userId,
+                                                     @PathVariable Long examId,
+                                                     @Valid @RequestBody SubmitRequest request) {
+        return CommonResponse.onSuccess(studentExamService.submitExam(userId, examId, request));
     }
 }

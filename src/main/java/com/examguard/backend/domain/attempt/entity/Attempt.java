@@ -97,6 +97,16 @@ public class Attempt {
         this.submittedAt = now;
     }
 
+    // 최종 제출 (답안 포함). 요청 답안이 서버에 저장된 답안보다 오래되지 않았을 때만 바꿔 넣는다
+    public void submit(int version, Map<String, Object> answers, Instant now) {
+        if (version >= this.version) {
+            this.version = version;
+            this.answers = answers;
+            this.answeredCount = countAnswered(answers);
+        }
+        submit(now);
+    }
+
     // 답한 문항 수 (빈 값은 안 푼 것으로 봄). 관리자 현황 화면용
     public static int countAnswered(Map<String, Object> answers) {
         return (int) answers.values().stream()
