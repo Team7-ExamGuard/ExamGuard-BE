@@ -1,10 +1,13 @@
 package com.examguard.backend.domain.exam.service;
 
+import com.examguard.backend.domain.attempt.entity.Attempt;
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
 import com.examguard.backend.domain.exam.dto.CloseResponse;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
+import com.examguard.backend.domain.exam.dto.ExamStatusResponse;
+import com.examguard.backend.domain.exam.dto.ExamStatusResponse.StudentStatus;
 import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
 import com.examguard.backend.domain.exam.dto.PublishResponse;
 import com.examguard.backend.domain.exam.dto.QuestionSaveRequest;
@@ -31,7 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 관리자 시험 출제: 생성·임시 저장(DRAFT) → 공개(코드 발급) → 조기 종료.
+ * 관리자 시험 출제: 생성·임시 저장(DRAFT) → 공개(코드 발급) → 응시 현황 조회 → 조기 종료.
  * 공개 검증 순서와 문구는 프론트 mock(src/api/mock/index.js)과 같게 맞춘다.
  */
 @Service
@@ -65,6 +68,21 @@ public class AdminExamService {
         Exam exam = findExam(examId);
         List<Question> questions = questionRepository.findByExamIdOrderBySeq(examId);
         return ExamDetailResponse.of(exam, questions, Instant.now());
+    }
+
+    // 응시 현황 (관리자 화면이 5초마다 호출)
+    public ExamStatusResponse getExamStatus(Long examId) {
+        Exam exam = findExam(examId);
+        Instant now = Instant.now();
+        // 종료 + 유예가 지나도록 제출하지 않은 학생은 마지막 저장 답안으로 제출 처리 (학생 쪽 조회와 같은 규칙)
+        if (exam.getEndAt() != null && !now.isBefore(exam.getEndAt().plus(Attempt.SUBMIT_GRACE))) {
+            attemptRepository.submitAllInProgress(examId, exam.getEndAt());
+        }
+
+        List<StudentStatus> students = attemptRepository.findStudentRows(examId).stream()
+                .map(StudentStatus::from)
+                .toList();
+        return ExamStatusResponse.of(exam, now, students);
     }
 
     public ExamIdResponse createExam(Long adminId, ExamSaveRequest request) {

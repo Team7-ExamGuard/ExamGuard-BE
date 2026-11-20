@@ -4,6 +4,7 @@ import com.examguard.backend.domain.exam.dto.CloseResponse;
 import com.examguard.backend.domain.exam.dto.ExamDetailResponse;
 import com.examguard.backend.domain.exam.dto.ExamIdResponse;
 import com.examguard.backend.domain.exam.dto.ExamSaveRequest;
+import com.examguard.backend.domain.exam.dto.ExamStatusResponse;
 import com.examguard.backend.domain.exam.dto.ExamSummaryResponse;
 import com.examguard.backend.domain.exam.dto.PublishResponse;
 import com.examguard.backend.domain.exam.service.AdminExamService;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // 권한(ADMIN)은 SecurityConfig의 /api/admin/** 규칙으로 확인
-@Tag(name = "관리자 - 시험 출제", description = "시험 생성·임시 저장·공개·조기 종료")
+@Tag(name = "관리자 - 시험 관리", description = "시험 생성·임시 저장·공개·응시 현황·조기 종료")
 @RestController
 @RequestMapping("/api/admin/exams")
 @RequiredArgsConstructor
@@ -42,6 +43,14 @@ public class AdminExamController {
     @GetMapping("/{examId}")
     public CommonResponse<ExamDetailResponse> getExam(@PathVariable Long examId) {
         return CommonResponse.onSuccess(adminExamService.getExam(examId));
+    }
+
+    @Operation(summary = "응시 현황 (5초 폴링)",
+            description = "학생은 입장한 순서대로. summary.saveFailed는 저장에 실패한 적 있는 학생 수. "
+                    + "종료 후 30초가 지나도록 제출하지 않은 학생은 제출 처리된 상태로 나옴")
+    @GetMapping("/{examId}/status")
+    public CommonResponse<ExamStatusResponse> getExamStatus(@PathVariable Long examId) {
+        return CommonResponse.onSuccess(adminExamService.getExamStatus(examId));
     }
 
     @Operation(summary = "시험 생성 (DRAFT)", description = "임시 저장과 같은 본문. 201 CREATED")
