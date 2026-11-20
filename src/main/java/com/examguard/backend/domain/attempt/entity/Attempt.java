@@ -97,6 +97,23 @@ public class Attempt {
         this.submittedAt = now;
     }
 
+    // 최종 제출 (답안 포함). 요청 답안이 서버에 저장된 답안보다 오래되지 않았을 때만 바꿔 넣는다
+    public void submit(int version, Map<String, Object> answers, Instant now) {
+        if (version >= this.version) {
+            this.version = version;
+            this.answers = answers;
+            this.answeredCount = countAnswered(answers);
+        }
+        submit(now);
+    }
+
+    // 답한 문항 수 (빈 값은 안 푼 것으로 봄). 관리자 현황 화면용
+    public static int countAnswered(Map<String, Object> answers) {
+        return (int) answers.values().stream()
+                .filter(value -> value != null && !"".equals(value))
+                .count();
+    }
+
     // 종료 시각 + 유예가 지나도록 제출하지 않은 응시 중 학생은 마지막 저장 답안으로 제출 처리.
     // 시작하지 않은 WAITING 학생은 그대로 둔다. 조회할 때마다 확인하므로 별도 스케줄러가 없다
     public void submitIfExpired(Instant now) {

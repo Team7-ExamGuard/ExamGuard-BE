@@ -1,9 +1,14 @@
 package com.examguard.backend.domain.exam.controller;
 
+import com.examguard.backend.domain.exam.dto.AnswersResponse;
 import com.examguard.backend.domain.exam.dto.JoinRequest;
 import com.examguard.backend.domain.exam.dto.JoinResponse;
+import com.examguard.backend.domain.exam.dto.SaveAnswersRequest;
+import com.examguard.backend.domain.exam.dto.SaveAnswersResponse;
 import com.examguard.backend.domain.exam.dto.StudentExamResponse;
 import com.examguard.backend.domain.exam.dto.StudentQuestionResponse;
+import com.examguard.backend.domain.exam.dto.SubmitRequest;
+import com.examguard.backend.domain.exam.dto.SubmitResponse;
 import com.examguard.backend.domain.exam.service.StudentExamService;
 import com.examguard.backend.global.payload.CommonResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,12 +20,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 // 권한(STUDENT)은 SecurityConfig의 /api/student/** 규칙으로 확인
-@Tag(name = "학생 - 시험 응시", description = "시험 코드 입장·시험 정보·문항 조회")
+@Tag(name = "학생 - 시험 응시", description = "시험 코드 입장·시험 정보·문항 조회·답안 저장·복원·최종 제출")
 @RestController
 @RequestMapping("/api/student/exams")
 @RequiredArgsConstructor
@@ -50,5 +56,33 @@ public class StudentExamController {
     public CommonResponse<List<StudentQuestionResponse>> getQuestions(@AuthenticationPrincipal Long userId,
                                                                       @PathVariable Long examId) {
         return CommonResponse.onSuccess(studentExamService.getQuestions(userId, examId));
+    }
+
+    @Operation(summary = "저장된 답안 조회 (복원)",
+            description = "저장한 적 없으면 version 0, answers {}, savedAt null. 입장하지 않은 시험이면 404 EXAM_NOT_FOUND")
+    @GetMapping("/{examId}/answers")
+    public CommonResponse<AnswersResponse> getAnswers(@AuthenticationPrincipal Long userId,
+                                                      @PathVariable Long examId) {
+        return CommonResponse.onSuccess(studentExamService.getAnswers(userId, examId));
+    }
+
+    @Operation(summary = "답안 자동 저장",
+            description = "answers 전체를 보냄. 저장된 version보다 큰 요청만 반영(아니면 409 STALE_VERSION). "
+                    + "시작 전 403 EXAM_NOT_STARTED, 종료 시각 이후 409 EXAM_CLOSED, 제출 완료 409 ALREADY_SUBMITTED")
+    @PutMapping("/{examId}/answers")
+    public CommonResponse<SaveAnswersResponse> saveAnswers(@AuthenticationPrincipal Long userId,
+                                                           @PathVariable Long examId,
+                                                           @Valid @RequestBody SaveAnswersRequest request) {
+        return CommonResponse.onSuccess(studentExamService.saveAnswers(userId, examId, request));
+    }
+
+    @Operation(summary = "최종 제출 (직접·자동 공용)",
+            description = "종료 후 30초까지 받음(지나면 409 EXAM_CLOSED). 요청 version이 저장된 version보다 낮으면 서버 답안 유지. "
+                    + "제출 완료 409 ALREADY_SUBMITTED, 시작 전 403 EXAM_NOT_STARTED")
+    @PostMapping("/{examId}/submit")
+    public CommonResponse<SubmitResponse> submitExam(@AuthenticationPrincipal Long userId,
+                                                     @PathVariable Long examId,
+                                                     @Valid @RequestBody SubmitRequest request) {
+        return CommonResponse.onSuccess(studentExamService.submitExam(userId, examId, request));
     }
 }

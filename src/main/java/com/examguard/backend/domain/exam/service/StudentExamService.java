@@ -3,24 +3,32 @@ package com.examguard.backend.domain.exam.service;
 import com.examguard.backend.domain.attempt.entity.Attempt;
 import com.examguard.backend.domain.attempt.entity.AttemptStatus;
 import com.examguard.backend.domain.attempt.repository.AttemptRepository;
+import com.examguard.backend.domain.exam.dto.AnswersResponse;
 import com.examguard.backend.domain.exam.dto.JoinResponse;
+import com.examguard.backend.domain.exam.dto.SaveAnswersRequest;
+import com.examguard.backend.domain.exam.dto.SaveAnswersResponse;
 import com.examguard.backend.domain.exam.dto.StudentExamResponse;
 import com.examguard.backend.domain.exam.dto.StudentQuestionResponse;
+import com.examguard.backend.domain.exam.dto.SubmitRequest;
+import com.examguard.backend.domain.exam.dto.SubmitResponse;
 import com.examguard.backend.domain.exam.entity.Exam;
 import com.examguard.backend.domain.exam.entity.ExamStatus;
 import com.examguard.backend.domain.exam.repository.ExamRepository;
 import com.examguard.backend.domain.exam.repository.QuestionRepository;
 import com.examguard.backend.global.exception.ExamException;
 import com.examguard.backend.global.payload.status.ErrorStatus;
+import com.examguard.backend.global.util.TimeUtils;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 학생 응시: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작).
+ * 학생 응시: 시험 코드로 입장 → 시험 정보 조회 → 문항 조회(응시 시작) → 답안 저장·복원 → 최종 제출.
  * 에러 판단 순서와 문구는 프론트 mock(src/api/mock/index.js)과 같게 맞춘다.
  */
 @Service
@@ -86,6 +94,55 @@ public class StudentExamService {
         return questionRepository.findByExamIdOrderBySeq(examId).stream()
                 .map(StudentQuestionResponse::from)
                 .toList();
+    }
+
+    // 새로고침·재접속 때 답안 복원용
+    public AnswersResponse getAnswers(Long userId, Long examId) {
+        return AnswersResponse.from(findMyAttempt(userId, examId, Instant.now()));
+    }
+
+    // 답안 자동 저장 (입력 후 2~3초마다). 종료 시각이 되면 바로 막는다 (유예는 최종 제출에만)
+    public SaveAnswersResponse saveAnswers(Long userId, Long examId, SaveAnswersRequest request) {
+        Instant now = Instant.now();
+        Attempt attempt = findMyAttempt(userId, examId, now);
+        if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
+            throw new ExamException(ErrorStatus.ALREADY_SUBMITTED);
+        }
+        if (attempt.getStatus() == AttemptStatus.WAITING) {
+            throw new ExamException(ErrorStatus.EXAM_NOT_STARTED);
+        }
+        if (!now.isBefore(attempt.getExam().getEndAt())) {
+            throw new ExamException(ErrorStatus.EXAM_CLOSED, "시험 시간이 끝났습니다.");
+        }
+
+        Map<String, Object> answers = request.answers() != null ? request.answers() : new HashMap<>();
+        int saveFailCount = request.saveFailCount() != null ? request.saveFailCount() : 0;
+        int updated = attemptRepository.saveAnswersIfNewer(attempt.getId(), request.version(), answers,
+                Attempt.countAnswered(answers), saveFailCount, now);
+        if (updated == 0) {
+            throw new ExamException(ErrorStatus.STALE_VERSION); // 프론트는 무시하고 재시도하지 않음
+        }
+        return new SaveAnswersResponse(request.version(), TimeUtils.toKst(now));
+    }
+
+    // 최종 제출 (직접 제출·시간 종료 자동 제출 공용). 종료 시각 후 유예(30초)까지 도착한 제출은 받는다
+    public SubmitResponse submitExam(Long userId, Long examId, SubmitRequest request) {
+        Instant now = Instant.now();
+        Attempt attempt = attemptRepository.findForUpdate(examId, userId)
+                .orElseThrow(() -> new ExamException(ErrorStatus.EXAM_NOT_FOUND));
+        if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
+            throw new ExamException(ErrorStatus.ALREADY_SUBMITTED); // 프론트는 성공으로 취급
+        }
+        if (attempt.getStatus() == AttemptStatus.WAITING) {
+            throw new ExamException(ErrorStatus.EXAM_NOT_STARTED);
+        }
+        if (!now.isBefore(attempt.getExam().getEndAt().plus(Attempt.SUBMIT_GRACE))) {
+            throw new ExamException(ErrorStatus.EXAM_CLOSED, "제출 가능 시간이 지났습니다.");
+        }
+
+        Map<String, Object> answers = request.answers() != null ? request.answers() : new HashMap<>();
+        attempt.submit(request.version(), answers, now); // 서버 답안이 더 최신이면 서버 답안 유지
+        return new SubmitResponse(TimeUtils.toKst(now));
     }
 
     // 학생 API 공통: 입장하지 않은 시험은 없는 시험과 똑같이 404
