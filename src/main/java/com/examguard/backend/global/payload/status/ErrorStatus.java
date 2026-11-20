@@ -32,6 +32,7 @@ public enum ErrorStatus implements BaseStatus {
     EXAM_NOT_STARTED(HttpStatus.FORBIDDEN, "EXAM_NOT_STARTED", "아직 시작 전입니다."),
     EXAM_CLOSED(HttpStatus.CONFLICT, "EXAM_CLOSED", "이미 종료된 시험입니다."),
     ALREADY_SUBMITTED(HttpStatus.CONFLICT, "ALREADY_SUBMITTED", "이미 제출한 시험입니다."),
+    STALE_VERSION(HttpStatus.CONFLICT, "STALE_VERSION", "더 최신 답안이 이미 저장되어 있습니다."),
     ;
 
     private final HttpStatus httpStatus;
